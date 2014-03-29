@@ -50,13 +50,9 @@ static NSString* MY_BEACON_UUID = @"16A2230E-0B8B-4D3D-BF83-36DA12001990";
 // CLLocationManagerDelegate implementation
 
 - (void)locationManager:(CLLocationManager *)manager didRangeBeacons:(NSArray *)beacons inRegion:(CLBeaconRegion *)region {
-    CLBeacon* strongestBeacon = nil;
-    for (CLBeacon* beacon in beacons) {
-        if ((!strongestBeacon) || (beacon.rssi > strongestBeacon.rssi)) {
-            strongestBeacon = beacon;
-        }
-    }
-    if (strongestBeacon) {
+
+    if ([beacons count]) {
+        CLBeacon* strongestBeacon = [beacons objectAtIndex:0];;
         NSString* prox = @"unknown";
         switch (strongestBeacon.proximity) {
             case CLProximityImmediate: prox = @"immediate"; break;
@@ -68,7 +64,7 @@ static NSString* MY_BEACON_UUID = @"16A2230E-0B8B-4D3D-BF83-36DA12001990";
                            strongestBeacon.major.intValue,
                            strongestBeacon.minor.intValue,
                            prox,
-                           strongestBeacon.rssi];
+                           (int)(strongestBeacon.rssi)];
     } else {
         self.label.text = @"No beacon in range";
     }
