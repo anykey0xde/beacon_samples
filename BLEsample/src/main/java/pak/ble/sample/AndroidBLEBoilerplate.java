@@ -1,6 +1,5 @@
 package pak.ble.sample;
 
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -10,8 +9,9 @@ import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.util.Log;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Created by a2800276 on 31/03/14.
@@ -20,30 +20,50 @@ public class AndroidBLEBoilerplate {
 
 
 
-    static final int ENABLE_BT_ACTIVITY = 1;
-    private static final long SCAN_TIME = 10000;
+    static final int  ENABLE_BT_ACTIVITY = 1;
+    static final long SCAN_TIME = 2000;
 
 
-    List<BLEScanResult> bleScanResultList;
+    Map<String, BLEScanResult> bleScanResultMap;
 
-    Activity activity;
+    boolean scanning;
+
+    MainActivity     activity;
     BluetoothManager btManager;
     BluetoothAdapter btAdapter;
+
     final Handler handler;
 
-    public AndroidBLEBoilerplate() {
+    static AndroidBLEBoilerplate areYouShittingMeYouSeriouslyExpectMeToCreateASingletonHere;
+
+    public static AndroidBLEBoilerplate getBLE() {
+        if (areYouShittingMeYouSeriouslyExpectMeToCreateASingletonHere == null) {
+            areYouShittingMeYouSeriouslyExpectMeToCreateASingletonHere = new AndroidBLEBoilerplate();
+        }
+        return areYouShittingMeYouSeriouslyExpectMeToCreateASingletonHere;
+    }
+
+    private AndroidBLEBoilerplate() {
         this.handler = new Handler();
-        this.bleScanResultList = new LinkedList<BLEScanResult>();
+        // this is used to buffer results in between invocations.
+        this.bleScanResultMap = new HashMap<String, BLEScanResult>();
 
     }
     /**
      * Set reference to Gemischtwarenladen
      * */
-    void setActivity (Activity activity) {
+    void setActivity (MainActivity activity) {
         this.activity = activity;
     }
 
+    boolean initialized;
     boolean init() {
+        if (initialized) {
+            return true;
+        } else {
+            initialized = true;
+        }
+
         PackageManager pm = this.activity.getPackageManager();
         if (!pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)){
             e("This device does not have a BLE feature.");
@@ -82,43 +102,89 @@ public class AndroidBLEBoilerplate {
         @Override
         public void onLeScan(BluetoothDevice bluetoothDevice, int i, byte[] bytes) {
 
-            BLEScanResult result = new BLEScanResult(bluetoothDevice, i, bytes);
+            final BLEScanResult result = new BLEScanResult(bluetoothDevice, i, bytes);
             d(result.toString());
-            // Store locally ...
-            bleScanResultList.remove(result);
-            bleScanResultList.add(result);
-            // give back to activity ..
-            ((MainActivity)activity).updateUI(result);
 
-
-
-
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    bleScanResultMap.put(result.device.getAddress(), result);
+                    activity.bleAdapter.notifyDataSetChanged();
+                }
+            });
         }
     };
 
     void scan() {
+        if (scanning) {
+            d("asked to start scanning, but not feeling up to it.");
+            this.activity.invalidateOptionsMenu();
+            return;
+        }
         d("starting scan.");
-        bleScanResultList = new LinkedList<BLEScanResult>();
-        ((MainActivity)activity).updateUIClearBLEList();
-        this.handler.postDelayed( new Runnable () {
+        //bleScanResultList = new LinkedList<BLEScanResult>();
+
+        checkBLEEnabled();
+
+        // mark all the previously found devices as old so we can grey them out or whatever.
+        this.activity.runOnUiThread( new Runnable() {
+            @Override
+            public void run() {
+                for (BLEScanResult r : bleScanResultMap.values()) {
+                    r.old = true;
+                }
+            }
+        });
+
+        // stop after a set amount of time.
+        this.handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 stopScan();
-                // tell activity we're done ... or inform about new devices in callback ... ?
-                for (BLEScanResult r : bleScanResultList) {
-                    d(r.toString());
-                }
             }
         }, SCAN_TIME);
-        checkBLEEnabled();
-        btAdapter.startLeScan(scanCB);
 
+        btAdapter.startLeScan(scanCB);
+        this.scanning = true;
+        this.activity.invalidateOptionsMenu();
     }
+
     void stopScan() {
+        if (!scanning) {
+            d("asked to stop scanning, but don't recall starting to.");
+            this.activity.invalidateOptionsMenu();
+            return;
+        }
         d("stopping scan.");
         checkBLEEnabled();
+
+        // throw out expired entries.
+        throwOutExpiredDevices();
         btAdapter.stopLeScan(scanCB);
-    };
+        this.scanning = false;
+        this.activity.invalidateOptionsMenu();
+    }
+
+    // throw out entries older than this long (15 minutes)
+    static final long CLEAR_INTERVAL = 1000 * 60 * 15;
+
+    void throwOutExpiredDevices() {
+        long now = System.currentTimeMillis();
+        // oh, the sheer elegance and beauty of Java...
+        Iterator<Map.Entry<String,BLEScanResult>> iter = bleScanResultMap.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<String, BLEScanResult> entry = iter.next();
+            if  ((now - entry.getValue().lastSeen) > CLEAR_INTERVAL) {
+                iter.remove();
+            }
+        }
+    }
+
+
+
+
+
+
 
     static String TAG = AndroidBLEBoilerplate.class.getSimpleName();
 
@@ -128,4 +194,6 @@ public class AndroidBLEBoilerplate {
     static void d (String mes) {
         Log.d(TAG, mes);
     }
+
+
 }

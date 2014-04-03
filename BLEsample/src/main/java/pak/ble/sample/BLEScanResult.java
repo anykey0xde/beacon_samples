@@ -9,14 +9,21 @@ import java.util.Arrays;
  * Created by a2800276 on 31/03/14.
  */
 public class BLEScanResult implements Comparable <BLEScanResult> {
+
+    long    lastSeen;
+    // will be marked as old before new scan.
+    boolean old;
+
     BluetoothDevice device;
     int rssi;
     BLEAdvertisingData record;
+
 
     public BLEScanResult(BluetoothDevice d, int rssi, byte [] rec) {
         this.device = d;
         this.rssi   = rssi;
         this.record = new BLEAdvertisingData(rec);
+        this.lastSeen = System.currentTimeMillis();
     }
 
     @Override
@@ -55,11 +62,8 @@ public class BLEScanResult implements Comparable <BLEScanResult> {
         if (!that.device.getAddress().equals(this.device.getAddress())) {
             return false;
         }
-        if (!Arrays.equals(record.bytes, that.record.bytes)) {
-            return false;
-        }
+        return Arrays.equals(record.bytes, that.record.bytes);
 
-        return true;
     }
 
     @Override
@@ -80,8 +84,12 @@ public class BLEScanResult implements Comparable <BLEScanResult> {
 
     @Override
     public int compareTo(BLEScanResult bleScanResult) {
+        // if one or the other wasn't seen since the  last scan ....
+        if (this.old && !bleScanResult.old) return 1;
+        if (bleScanResult.old && !this.old) return -1;
+        // else sort by strength
         if (this.rssi == bleScanResult.rssi) return 0;
-        if (this.rssi > bleScanResult.rssi) return 1;
-        return -1;
+        if (this.rssi > bleScanResult.rssi) return -1;
+        return 1;
     }
 }

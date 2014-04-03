@@ -1,5 +1,7 @@
 package pak.ble.sample;
 
+import android.util.Log;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -8,14 +10,13 @@ import java.util.List;
  */
 public class BLEAdvertisingData {
     byte[] bytes;
-    boolean valid;
     List<AdvertisementEntry> entries;
 
 
     public BLEAdvertisingData(byte [] bytes) {
         this.bytes = bytes;
         entries = new LinkedList<AdvertisementEntry>();
-        //parse();
+        parse();
     }
 
     void parse() {
@@ -23,78 +24,31 @@ public class BLEAdvertisingData {
         // |LEN (1byte) | AD Type (1 byte) | value |
         for (int i = 0; i< bytes.length ;) {
             int len = bytes[i] & 0xff;
+            if (len == 0) break;
+            Log.d("", "" + len);
             if ((i + len) >= bytes.length) { /* data invalid */}
             ++i;
             byte    type = bytes[i];
             ++i;
             byte [] data = new byte[len-1];
             System.arraycopy(bytes, i, data, 0, len-1);
+            i+=len-1;
             entries.add(new AdvertisementEntry(type, data));
         }
     }
     String getFormattedBytes () {
-        return toHex(bytes);
+        return BLEUtils.toHex(bytes);
     }
 
-    static String mapType (byte type) {
-        // https://www.bluetooth.org/en-us/specification/assigned-numbers/generic-access-profile
-        switch (type & 0xff) {
-            case 0x01: return "Flags";
-            case 0x02: return "Incomplete List of 16-bit Service Class UUIDs";
-            case 0x03: return "Complete List of 16-bit Service Class UUIDs";
-            case 0x04: return "Incomplete List of 32-bit Service Class UUIDs";
-            case 0x05: return "Complete List of 32-bit Service Class UUIDs";
-            case 0x06: return "Incomplete List of 128-bit Service Class UUIDs";
-            case 0x07: return "Complete List of 128-bit Service Class UUIDs";
-            case 0x08: return "Shortened Local Name";
-            case 0x09: return "Complete Local Name";
-            case 0x0A: return "Tx Power Level";
-            case 0x0D: return "Class of Device";
-            case 0x0E: return "Simple Pairing Hash C";
-            case 0x0F: return "Simple Pairing Randomizer R";
-            case 0x10: return "Security Manager TK Value";
-            case 0x11: return "Security Manager Out of Band Flags";
-            case 0x12: return "Slave Connection Interval Range";
-            case 0x14: return "List of 16-bit Service Solicitation UUIDs";
-            case 0x15: return "List of 128-bit Service Solicitation UUIDs";
-            case 0x16: return "Service Data";
-            case 0x20: return "Service Data - 32-bit UUID";
-            case 0x21: return "Service Data - 128-bit UUID";
-            case 0x17: return "Public Target Address";
-            case 0x18: return "Random Target Address";
-            case 0x19: return "Appearance";
-            case 0x1A: return "Advertising Interval";
-            case 0x1B: return "LE Bluetooth Device Address";
-            case 0x1C: return "LE Role";
-            case 0x1D: return "Simple Pairing Hash C-256";
-            case 0x1E: return "Simple Pairing Randomizer R-256";
-            case 0x3D: return "3D Information Data";
-            case 0xFF: return "Manufacturer Specific Data";
-
-            default: return "unknown";
+    static String mapData(byte type, byte[]entry) {
+        switch (type) {
+            case 0x01: return BLEConstants.advertisingFlagsToString(entry);
+            case 0x08:
+            case 0x09:
+                    return new String(entry);
+            default: return BLEUtils.toHex(entry);
         }
     }
-
-    private String toHex(byte [] bytes) {
-        StringBuilder sb = new StringBuilder();
-
-
-        for (int i = 0; i != bytes.length; ++i){
-            if (i%8 == 0 && i!= 0) {
-                sb.append("\n");
-            }
-            String s = Integer.toHexString(bytes[i] & 0xff);
-            if (s.length() == 1) {
-                sb.append('0');
-            }
-            sb.append(s);
-            sb.append(" ");
-
-
-        }
-        return sb.toString();
-    }
-
 
 
     class AdvertisementEntry {
@@ -103,6 +57,9 @@ public class BLEAdvertisingData {
         public AdvertisementEntry(byte t, byte[] data) {
             this.type = t;
             this.data = data;
+        }
+        public String toString() {
+            return BLEConstants.advertisingTypeToString(type) + ":\n" + mapData(type, data);
         }
     }
 }
